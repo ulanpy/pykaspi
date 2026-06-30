@@ -16,3 +16,7 @@ class KaspiApiError(PykaspiError):
 
 class KaspiAuthError(KaspiApiError):
     """Raised when the Kaspi auth/session flow is rejected."""
+
+
+class KaspiReauthRequiredError(KaspiAuthError):
+    """Raised when SignInLite refresh cannot recover the session and SMS auth is required."""

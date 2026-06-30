@@ -16,6 +16,25 @@ from .transport import KaspiTransport
 
 
 class KaspiClient:
+    """Async entry point for the Kaspi Pay POS client.
+
+    Parameters:
+        device: Stable virtual Kaspi device identity. Generate once with
+            `DeviceIdentity.generate()` and persist it in secure storage.
+        app: Mobile app fingerprint used when signing Kaspi private API requests.
+        http_client: Optional externally managed `httpx.AsyncClient`.
+        timeout: Default HTTP timeout when pykaspi owns the HTTP client.
+        debug: Enable sanitized transport debug logging.
+
+    Attributes:
+        auth: SMS login, session refresh, and organization context API.
+        qr: QR payment creation/status API.
+        invoice: Remote invoice API.
+        history: Operations history API.
+        refund: Refund API.
+        session: Session health-check API.
+    """
+
     def __init__(
         self,
         device: DeviceIdentity | None = None,
@@ -37,9 +56,11 @@ class KaspiClient:
         self.session = SessionApi(self.transport, self.device, self.app)
 
     async def aclose(self) -> None:
+        """Close the underlying HTTP client if it is owned by this instance."""
         await self.transport.aclose()
 
     async def __aenter__(self) -> "KaspiClient":
+        """Enter an async context manager and return this client."""
         return self
 
     async def __aexit__(

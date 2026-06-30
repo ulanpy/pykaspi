@@ -19,6 +19,14 @@ EcPublicKey = ec.EllipticCurvePublicKey
 
 @dataclass(slots=True)
 class DeviceIdentity:
+    """Stable virtual Kaspi Pay mobile device identity.
+
+    Kaspi's private API ties sessions and signatures to a device-like identity:
+    `device_id`, `install_id`, `pin_hash`, and an EC P-256 signing key. Generate
+    this once per merchant/cashier integration and store it securely. Replacing
+    it makes Kaspi see a new device and may require SMS re-auth.
+    """
+
     device_id: str
     install_id: str
     pin_hash: str
@@ -26,6 +34,7 @@ class DeviceIdentity:
 
     @classmethod
     def generate(cls) -> "DeviceIdentity":
+        """Generate a new local device identity without writing it to disk."""
         private_key = ec.generate_private_key(ec.SECP256R1())
         return cls(
             device_id=str(uuid.uuid4()).upper(),
@@ -36,6 +45,7 @@ class DeviceIdentity:
 
     @classmethod
     def from_json(cls, data: str | bytes | bytearray | dict[str, Any]) -> "DeviceIdentity":
+        """Load a device identity from a JSON string/bytes or dictionary."""
         raw = json.loads(data) if not isinstance(data, dict) else data
         private_der = base64.b64decode(raw["privateKey"])
         private_key = serialization.load_der_private_key(private_der, password=None)
@@ -50,9 +60,11 @@ class DeviceIdentity:
 
     @classmethod
     def load(cls, path: str | Path) -> "DeviceIdentity":
+        """Load a device identity from a JSON file."""
         return cls.from_json(Path(path).read_text())
 
     def to_dict(self) -> dict[str, str]:
+        """Serialize this device identity to a JSON-compatible dictionary."""
         private_der = self.private_key.private_bytes(
             encoding=serialization.Encoding.DER,
             format=serialization.PrivateFormat.PKCS8,
@@ -71,14 +83,21 @@ class DeviceIdentity:
         }
 
     def save(self, path: str | Path) -> None:
+        """Save this device identity to a JSON file.
+
+        The resulting file contains signing credentials and should be treated as
+        a secret.
+        """
         Path(path).write_text(json.dumps(self.to_dict(), indent=2))
 
     @property
     def public_key(self) -> EcPublicKey:
+        """Return the EC public key associated with the device private key."""
         return self.private_key.public_key()
 
     @property
     def x509(self) -> str:
+        """Return the device public key as base64 DER SubjectPublicKeyInfo."""
         public_der = self.public_key.public_bytes(
             encoding=serialization.Encoding.DER,
             format=serialization.PublicFormat.SubjectPublicKeyInfo,
@@ -87,6 +106,7 @@ class DeviceIdentity:
 
     @property
     def pk(self) -> str:
+        """Return the uncompressed EC public key point used in entrance cookies."""
         point = self.public_key.public_bytes(
             encoding=serialization.Encoding.X962,
             format=serialization.PublicFormat.UncompressedPoint,
@@ -95,4 +115,5 @@ class DeviceIdentity:
 
     @property
     def pk_tag(self) -> str:
+        """Return Kaspi's MD5 tag for the `pk` cookie/header value."""
         return hashlib.md5(self.pk.encode()).hexdigest()  # noqa: S324 - part of Kaspi signature protocol

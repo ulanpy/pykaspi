@@ -1,15 +1,17 @@
 from __future__ import annotations
 
 import asyncio
+import json
 from pathlib import Path
 
-from pykaspi import DeviceIdentity, KaspiClient
+from pykaspi import DeviceIdentity, KaspiClient, KaspiSession
 
 
 AUTH_PHONE = "+77071027599"
 # Remote invoice recipient. Use a real personal Kaspi client phone, not necessarily the cashier phone.
 CLIENT_PHONE = "+77072818516"
 DEVICE_FILE = Path("device.json")
+SESSION_FILE = Path("session.json")
 
 
 def load_or_create_device() -> DeviceIdentity:
@@ -34,6 +36,24 @@ def mask_secret(value: str, *, visible: int = 6) -> str:
     return f"{value[:visible]}...{value[-visible:]}"
 
 
+def save_session(session: KaspiSession) -> None:
+    SESSION_FILE.write_text(
+        json.dumps(
+            {
+                "token_sn": session.token_sn,
+                "vtoken_secret_b64": session.vtoken_secret_b64,
+                "ecdh_private_key_b64": session.ecdh_private_key_b64,
+                "profile_id": session.profile_id,
+                "organization_id": session.organization_id,
+                "phone_number": session.phone_number,
+                "org_name": session.org_name,
+            },
+            ensure_ascii=False,
+            indent=2,
+        )
+    )
+
+
 async def main() -> None:
     device = load_or_create_device()
     auth_phone = normalize_kz_phone(AUTH_PHONE)
@@ -51,6 +71,7 @@ async def main() -> None:
 
         otp = input("SMS code: ")
         session = await client.auth.verify_otp(init["process_id"], otp)
+        save_session(session)
 
         print("token_sn:", mask_secret(session.token_sn))
         print("vtoken_secret_b64:", mask_secret(session.vtoken_secret_b64))

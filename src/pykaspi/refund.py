@@ -1,15 +1,16 @@
 from __future__ import annotations
 
-from typing import Any
-
 from .config import AppConfig, KASPI_QRPAY_URL
 from .device import DeviceIdentity
 from .headers import signed_qrpay_headers
 from .models import KaspiSession
+from .schemas import KaspiResponse, RefundCreateData
 from .transport import KaspiTransport
 
 
 class RefundApi:
+    """Refund API for already processed Kaspi QR operations."""
+
     def __init__(self, transport: KaspiTransport, device: DeviceIdentity, app: AppConfig) -> None:
         self.transport = transport
         self.device = device
@@ -20,9 +21,16 @@ class RefundApi:
         session: KaspiSession,
         qr_operation_id: int | str,
         return_amount: int | float,
-    ) -> dict[str, Any]:
+    ) -> KaspiResponse[RefundCreateData]:
+        """Create a refund for a processed QR operation.
+
+        Args:
+            session: Active Kaspi session.
+            qr_operation_id: Kaspi QR operation id to refund.
+            return_amount: Amount to return in KZT.
+        """
         url = f"{KASPI_QRPAY_URL}/v01/kaspi-qr/history-pos-return"
-        return await self.transport.request(
+        body = await self.transport.request(
             "POST",
             url,
             headers={**signed_qrpay_headers(url, session, self.device, self.app), "Content-Type": "application/json"},
@@ -32,3 +40,4 @@ class RefundApi:
                 "DeviceInterface": "Pos",
             },
         )
+        return KaspiResponse[RefundCreateData].model_validate(body)

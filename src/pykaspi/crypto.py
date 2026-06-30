@@ -23,6 +23,22 @@ class EcdhKeyPair:
     def generate(cls) -> "EcdhKeyPair":
         return cls(ec.generate_private_key(ec.SECP256R1()))
 
+    @classmethod
+    def from_private_key_b64(cls, value: str) -> "EcdhKeyPair":
+        private_key = serialization.load_der_private_key(base64.b64decode(value), password=None)
+        if not isinstance(private_key, ec.EllipticCurvePrivateKey):
+            raise TypeError("ECDH private key must be an EC private key")
+        return cls(private_key)
+
+    @property
+    def private_key_b64(self) -> str:
+        private_der = self.private_key.private_bytes(
+            encoding=serialization.Encoding.DER,
+            format=serialization.PrivateFormat.PKCS8,
+            encryption_algorithm=serialization.NoEncryption(),
+        )
+        return base64.b64encode(private_der).decode()
+
     @property
     def x509(self) -> str:
         public_der = self.private_key.public_key().public_bytes(

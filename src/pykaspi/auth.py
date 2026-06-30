@@ -7,7 +7,7 @@ from typing import Any
 from .config import AppConfig, KASPI_ENTRANCE_URL, KASPI_MTOKEN_URL
 from .crypto import EcdhKeyPair, sign_data_payload
 from .device import DeviceIdentity
-from .exceptions import KaspiAuthError
+from .exceptions import KaspiAuthError, KaspiReauthRequiredError
 from .headers import (
     build_device_information,
     build_mtoken_headers,
@@ -22,6 +22,8 @@ from .transport import KaspiTransport
 
 
 class AuthApi:
+    """SMS authentication, session refresh, and organization context API."""
+
     def __init__(self, transport: KaspiTransport, device: DeviceIdentity, app: AppConfig) -> None:
         self.transport = transport
         self.device = device
@@ -30,6 +32,12 @@ class AuthApi:
         self._registration_ecdh: EcdhKeyPair | None = None
 
     async def init(self) -> dict[str, Any]:
+        """Start Kaspi SMS login and return a `process_id`.
+
+        Call `send_phone(process_id, phone_number)` next. The `phone_number`
+        should be a local Kazakhstan mobile number without `+7`/`8`, for
+        example `"7071027599"`.
+        """
         session = EntranceSession()
         url = f"{KASPI_ENTRANCE_URL}/api/v1/entrance/step"
         headers = {
@@ -76,6 +84,15 @@ class AuthApi:
         return {"process_id": session.process_id, "view": (body.get("view") or {}).get("code"), "body": body}
 
     async def send_phone(self, process_id: str, phone_number: str) -> dict[str, Any]:
+        """Send the cashier phone number and trigger Kaspi SMS OTP.
+
+        Args:
+            process_id: Value returned by `init()`.
+            phone_number: Local KZ mobile digits without country prefix.
+
+        Returns:
+            A raw entrance response dictionary with a boolean `success` field.
+        """
         session = self._get_entrance_session(process_id)
         session.phone_number = phone_number
         url = f"{KASPI_ENTRANCE_URL}/api/v1/entrance/step"
@@ -107,6 +124,12 @@ class AuthApi:
         }
 
     async def verify_otp(self, process_id: str, otp: str) -> KaspiSession:
+        """Verify SMS OTP and return an authenticated `KaspiSession`.
+
+        Persist the returned session securely. It contains `token_sn`,
+        `vtoken_secret`, organization context, and `ecdh_private_key_b64` for
+        future SignInLite refresh attempts.
+        """
         entrance_session = self._get_entrance_session(process_id)
         url = f"{KASPI_ENTRANCE_URL}/api/v1/entrance/step"
         response, body = await self.transport.request_with_response(
@@ -138,6 +161,19 @@ class AuthApi:
             self._entrance_sessions.pop(process_id, None)
 
     async def refresh(self, session: KaspiSession, *, organization_id: int | str | None = None) -> KaspiSession:
+        """Refresh an existing session through Kaspi SignInLite.
+
+        Args:
+            session: Previously saved Kaspi session.
+            organization_id: Optional organization override.
+
+        Raises:
+            KaspiReauthRequiredError: Kaspi rejected refresh or the stored
+                session lacks the ECDH key required to activate a new vtoken.
+
+        Returns:
+            A refreshed `KaspiSession`. Save it over the old session.
+        """
         url = f"{KASPI_MTOKEN_URL}/v03/auth/sign-in-lite"
         body = await self.transport.request(
             "POST",
@@ -150,7 +186,7 @@ class AuthApi:
         )
 
         if body.get("StatusCode") != 0 or not body.get("Data"):
-            raise KaspiAuthError(
+            raise KaspiReauthRequiredError(
                 body.get("Message") or body.get("Description") or "SignInLite failed",
                 body=body,
             )
@@ -159,12 +195,22 @@ class AuthApi:
         token_sn = data.get("TokenSn") or data.get("tokenSN") or session.token_sn
         secret = session.vtoken_secret
         server_x509 = data.get("X509") or data.get("x509")
-        if server_x509 and self._registration_ecdh:
-            secret = self._registration_ecdh.complete(server_x509)
+        if server_x509:
+            if session.ecdh_private_key_b64:
+                secret = EcdhKeyPair.from_private_key_b64(session.ecdh_private_key_b64).complete(server_x509)
+            elif self._registration_ecdh:
+                secret = self._registration_ecdh.complete(server_x509)
+            else:
+                raise KaspiReauthRequiredError(
+                    "SignInLite returned X509, but the original ECDH private key is not available. "
+                    "Re-authenticate by SMS and persist ecdh_private_key_b64.",
+                    body=body,
+                )
 
         refreshed = KaspiSession(
             token_sn=token_sn,
             vtoken_secret=secret,
+            ecdh_private_key_b64=session.ecdh_private_key_b64,
             phone_number=session.phone_number,
             organization_id=organization_id or session.organization_id,
             raw=body,
@@ -180,6 +226,7 @@ class AuthApi:
         *,
         organization_id: int | str | None = None,
     ) -> KaspiSession:
+        """Load organization context and merge it into the session."""
         url = f"{KASPI_MTOKEN_URL}/v08/organizations/org-context-otp"
         body = await self.transport.request(
             "POST",
@@ -241,6 +288,7 @@ class AuthApi:
         session = KaspiSession(
             token_sn=token_sn,
             vtoken_secret=ecdh.complete(server_x509),
+            ecdh_private_key_b64=ecdh.private_key_b64,
             phone_number=entrance_session.phone_number,
             raw={"finish": body},
         )

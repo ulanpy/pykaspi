@@ -13,6 +13,13 @@ SENSITIVE_HEADERS = {"authorization", "cookie", "x-kb-tokensn", "x-kb-tokensnmac
 
 
 class KaspiTransport:
+    """Small async HTTP transport wrapper used by all pykaspi APIs.
+
+    Advanced users may pass their own `httpx.AsyncClient` through
+    `KaspiClient(http_client=...)`. Debug logging sanitizes known sensitive
+    headers before writing them to the logger.
+    """
+
     def __init__(
         self,
         *,
@@ -27,6 +34,7 @@ class KaspiTransport:
         self.logger = logger or logging.getLogger("pykaspi")
 
     async def aclose(self) -> None:
+        """Close the owned `httpx.AsyncClient`, if pykaspi created it."""
         if self._own_client:
             await self.client.aclose()
 
@@ -39,6 +47,11 @@ class KaspiTransport:
         json: Any = None,
         params: Mapping[str, Any] | None = None,
     ) -> dict[str, Any]:
+        """Send an HTTP request and return parsed JSON.
+
+        Raises:
+            KaspiApiError: Network errors or non-2xx HTTP responses.
+        """
         response, body = await self.request_with_response(method, url, headers=headers, json=json, params=params)
         if response.is_error:
             message = body.get("Message") or body.get("message") or response.reason_phrase
@@ -55,6 +68,7 @@ class KaspiTransport:
         json: Any = None,
         params: Mapping[str, Any] | None = None,
     ) -> tuple[httpx.Response, dict[str, Any]]:
+        """Send an HTTP request and return both `httpx.Response` and JSON body."""
         if self.debug:
             self.logger.debug("Kaspi request %s %s headers=%s", method, url, self._sanitize(headers or {}))
         try:

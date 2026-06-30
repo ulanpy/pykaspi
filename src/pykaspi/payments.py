@@ -6,6 +6,7 @@ from dataclasses import dataclass
 from typing import Any, Literal
 
 from .models import KaspiSession
+from .schemas import KaspiResponse
 
 
 PaymentType = Literal["qr", "invoice"]
@@ -43,6 +44,10 @@ INVOICE_INTERMEDIATE = {"RemotePaymentCreated"}
 
 
 def resolve_payment_event(payment_type: PaymentType, status: str) -> str | None:
+    """Map a Kaspi payment status to a normalized payment event.
+
+    Returns `None` for intermediate statuses that should continue polling.
+    """
     if payment_type == "qr":
         if status in QR_INTERMEDIATE:
             return None
@@ -54,13 +59,28 @@ def resolve_payment_event(payment_type: PaymentType, status: str) -> str | None:
 
 @dataclass(slots=True)
 class PaymentPollResult:
+    """Result returned by `poll_until_final`."""
+
     event: str
     status: str
-    body: dict[str, Any]
+    body: Any
+
+
+def _extract_status(body: Any) -> str:
+    if isinstance(body, KaspiResponse):
+        data = body.data
+        if data is None:
+            return "Unknown"
+        if isinstance(data, dict):
+            return str(data.get("Status") or "Unknown")
+        return str(getattr(data, "status", None) or getattr(data, "Status", None) or "Unknown")
+    if isinstance(body, dict):
+        return str(((body.get("Data") or {}).get("Status")) or "Unknown")
+    return str(getattr(body, "status", None) or "Unknown")
 
 
 async def poll_until_final(
-    fetch_status: Callable[[KaspiSession, int | str], Awaitable[dict[str, Any]]],
+    fetch_status: Callable[[KaspiSession, int | str], Awaitable[Any]],
     session: KaspiSession,
     payment_id: int | str,
     *,
@@ -68,10 +88,21 @@ async def poll_until_final(
     interval: float = 3.0,
     timeout: float = 180.0,
 ) -> PaymentPollResult:
+    """Poll a payment status function until a final event is observed.
+
+    Args:
+        fetch_status: Async function like `client.qr.status` or
+            `client.invoice.details`.
+        session: Active Kaspi session.
+        payment_id: Kaspi operation id.
+        payment_type: Either `"qr"` or `"invoice"`.
+        interval: Delay between status checks in seconds.
+        timeout: Maximum wait time in seconds.
+    """
     deadline = asyncio.get_running_loop().time() + timeout
     while True:
         body = await fetch_status(session, payment_id)
-        status = ((body.get("Data") or {}).get("Status")) or "Unknown"
+        status = _extract_status(body)
         event = resolve_payment_event(payment_type, status)
         if event:
             return PaymentPollResult(event=event, status=status, body=body)

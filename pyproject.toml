@@ -6,12 +6,36 @@ readme = "README.md"
 authors = [
     { name = "Ulan Sharipov", email = "ulan.sharipov@nu.edu.kz" }
 ]
+license = "MIT"
+license-files = ["LICENSE"]
 requires-python = ">=3.12"
+keywords = [
+    "kaspi",
+    "kaspi-pay",
+    "payments",
+    "qr",
+    "pos",
+    "async",
+]
+classifiers = [
+    "Development Status :: 3 - Alpha",
+    "Framework :: AsyncIO",
+    "Intended Audience :: Developers",
+    "Operating System :: OS Independent",
+    "Programming Language :: Python :: 3",
+    "Programming Language :: Python :: 3.12",
+    "Typing :: Typed",
+]
 dependencies = [
     "cryptography>=49.0.0",
     "httpx>=0.28.1",
     "pydantic>=2.13.4",
 ]
+
+[project.urls]
+Homepage = "https://github.com/ulanpy/pykaspi"
+Repository = "https://github.com/ulanpy/pykaspi"
+Issues = "https://github.com/ulanpy/pykaspi/issues"
 
 [build-system]
 requires = ["uv_build>=0.11.17,<0.12.0"]

@@ -9,6 +9,14 @@ The project is extracted from `kaspi-pos-automation`, but it is a library, not a
 ## Install
 
 ```bash
+pip install pykaspi
+```
+
+```bash
+poetry add pykaspi
+```
+
+```bash
 uv add pykaspi
 ```
 
@@ -37,9 +45,8 @@ async def main() -> None:
         otp = input("SMS code: ")
         session = await client.auth.verify_otp(init["process_id"], otp)
 
-        # Persist these values in your own secure storage.
-        print("token_sn:", session.token_sn)
-        print("vtoken_secret_b64:", session.vtoken_secret_b64)
+        # Persist session.token_sn, session.vtoken_secret_b64,
+        # session.ecdh_private_key_b64, and org fields in secure storage.
 
         qr = await client.qr.create(session, amount=1000)
         print(qr.data.qr_operation_id)
@@ -138,7 +145,7 @@ from pykaspi import KaspiReauthRequiredError
 
 async def ensure_session(client, session, save_session, require_sms_reauth):
     check = await client.session.check(session)
-    if check["active"]:
+    if check.active:
         return session
 
     try:
@@ -158,14 +165,20 @@ async def ensure_session(client, session, save_session, require_sms_reauth):
 Create a remote invoice:
 
 ```bash
+PYKASPI_AUTH_PHONE="+77001234567" \
+PYKASPI_CLIENT_PHONE="+77007654321" \
 uv run python examples/live_invoice.py
 ```
 
 Create a QR payment token:
 
 ```bash
+PYKASPI_AUTH_PHONE="+77001234567" \
 uv run python examples/live_qr.py
 ```
+
+The example values are placeholders. Use a real Kaspi Pay cashier phone for
+`PYKASPI_AUTH_PHONE` and a real Kaspi customer phone for `PYKASPI_CLIENT_PHONE`.
 
 ## Development
 

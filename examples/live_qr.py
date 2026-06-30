@@ -2,13 +2,14 @@ from __future__ import annotations
 
 import asyncio
 import json
+import os
 from pathlib import Path
 from typing import Any
 
 from pykaspi import DeviceIdentity, KaspiClient, KaspiReauthRequiredError, KaspiSession
 
 
-AUTH_PHONE = "+7072818516"
+AUTH_PHONE = os.environ.get("PYKASPI_AUTH_PHONE", "+77001234567")
 AMOUNT = 100
 DEVICE_FILE = Path("device.json")
 SESSION_FILE = Path("session.json")

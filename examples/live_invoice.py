@@ -2,14 +2,15 @@ from __future__ import annotations
 
 import asyncio
 import json
+import os
 from pathlib import Path
 
 from pykaspi import DeviceIdentity, KaspiClient, KaspiSession
 
 
-AUTH_PHONE = "+77071027599"
+AUTH_PHONE = os.environ.get("PYKASPI_AUTH_PHONE", "+77001234567")
 # Remote invoice recipient. Use a real personal Kaspi client phone, not necessarily the cashier phone.
-CLIENT_PHONE = "+77072818516"
+CLIENT_PHONE = os.environ.get("PYKASPI_CLIENT_PHONE", "+77007654321")
 DEVICE_FILE = Path("device.json")
 SESSION_FILE = Path("session.json")
 

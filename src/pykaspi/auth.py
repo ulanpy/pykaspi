@@ -36,7 +36,7 @@ class AuthApi:
 
         Call `send_phone(process_id, phone_number)` next. The `phone_number`
         should be a local Kazakhstan mobile number without `+7`/`8`, for
-        example `"7071027599"`.
+        example `"7001234567"`.
         """
         session = EntranceSession()
         url = f"{KASPI_ENTRANCE_URL}/api/v1/entrance/step"

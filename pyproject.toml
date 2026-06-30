@@ -1,0 +1,23 @@
+[project]
+name = "pykaspi"
+version = "0.1.0"
+description = "Async Python client for Kaspi Pay POS private HTTP API"
+readme = "README.md"
+authors = [
+    { name = "Ulan Sharipov", email = "ulan.sharipov@nu.edu.kz" }
+]
+requires-python = ">=3.12"
+dependencies = [
+    "cryptography>=49.0.0",
+    "httpx>=0.28.1",
+]
+
+[build-system]
+requires = ["uv_build>=0.11.17,<0.12.0"]
+build-backend = "uv_build"
+
+[dependency-groups]
+dev = [
+    "pytest>=9.1.1",
+    "pytest-asyncio>=1.4.0",
+]

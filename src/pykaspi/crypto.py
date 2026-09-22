@@ -91,18 +91,19 @@ def compute_xsu(url: str) -> str:
     return hashlib.md5(url.lower().encode()).hexdigest()  # noqa: S324 - part of Kaspi signature protocol
 
 
-def compute_x_sign(url: str, headers: dict[str, str], xsh_list: str, device: DeviceIdentity) -> str:
+def compute_x_sign(
+    url: str, headers: dict[str, str], xsh_list: str, device: DeviceIdentity, body: str | None = None,
+) -> str:
     parts: list[str] = []
     for name in xsh_list.split(","):
         if name == "url":
-            from urllib.parse import urlsplit
-
-            parsed = urlsplit(url)
-            path = parsed.path or url
-            parts.append(path + (f"?{parsed.query}" if parsed.query else ""))
+            parts.append(f"url:{url.lower()}")
         else:
-            parts.append(headers.get(name, ""))
-    return ec_sign("".join(parts), device)
+            parts.append(f"{name.lower()}:{headers.get(name, '')}")
+    signed = "\n".join(parts)
+    if body is not None:
+        signed += f"\n{body}"
+    return ec_sign(hashlib.sha256(signed.encode()).digest(), device)
 
 
 def secret_to_base64(secret: bytes) -> str:

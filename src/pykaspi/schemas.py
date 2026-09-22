@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from typing import Any, Generic, TypeVar
+from typing import Any, Generic, Literal, TypeVar
 
 from pydantic import BaseModel, ConfigDict, Field
 
@@ -43,6 +43,47 @@ class KaspiResponse(FlexibleModel, Generic[DataT]):
         return self.status_code in (None, 0)
 
 
+class AuthInitResult(FlexibleModel):
+    """Result of `client.auth.init()`.
+
+    `process_id` is a temporary Kaspi entrance process id used by
+    `send_phone()` and `verify_otp()`.
+    """
+
+    process_id: str
+    view: str | None = None
+    body: dict[str, Any]
+
+
+class SendPhoneResult(FlexibleModel):
+    """Result of `client.auth.send_phone()`."""
+
+    status: Literal["otp_required", "password_required", "mobile_confirmation_required", "unsupported_challenge"]
+    success: bool
+    process_id: str
+    description: str | None = None
+    view: str | None = None
+    challenge_type: str | None = None
+    operation_type: str | None = None
+    auth_methods: list[dict[str, Any]] | None = None
+    body: dict[str, Any]
+
+    @property
+    def requires_otp(self) -> bool:
+        """Return true when Kaspi sent an SMS OTP challenge."""
+        return self.status == "otp_required"
+
+    @property
+    def requires_password(self) -> bool:
+        """Return true when Kaspi requests the account login password."""
+        return self.status == "password_required"
+
+    @property
+    def requires_mobile_confirmation(self) -> bool:
+        """Return true when Kaspi requested app/mobile confirmation."""
+        return self.status == "mobile_confirmation_required"
+
+
 class QrPaymentBehaviorOptions(FlexibleModel):
     """Kaspi QR frontend timing/options payload."""
 
@@ -69,7 +110,7 @@ class QrCreateData(FlexibleModel):
         alias="QrPaymentBehaviorOptions",
     )
     receipt_url: str | None = Field(default=None, alias="ReceiptUrl")
-    amount: float | int | None = Field(default=None, alias="Amount")
+    amount: float | int | str | None = Field(default=None, alias="Amount")
 
 
 class QrStatusData(FlexibleModel):
@@ -95,7 +136,7 @@ class InvoiceCreateData(FlexibleModel):
     id: int | None = Field(default=None, alias="Id")
     qr_operation_id: int | None = Field(default=None, alias="QrOperationId")
     status: str | None = Field(default=None, alias="Status")
-    amount: float | int | None = Field(default=None, alias="Amount")
+    amount: float | int | str | None = Field(default=None, alias="Amount")
     client_mobile: str | None = Field(default=None, alias="ClientMobile")
     receipt_url: str | None = Field(default=None, alias="ReceiptUrl")
     order_number: str | int | None = Field(default=None, alias="OrderNumber")
@@ -108,7 +149,7 @@ class InvoiceDetailsData(FlexibleModel):
     qr_operation_id: int | None = Field(default=None, alias="QrOperationId")
     status: str | None = Field(default=None, alias="Status")
     status_desc: str | None = Field(default=None, alias="StatusDesc")
-    amount: float | int | None = Field(default=None, alias="Amount")
+    amount: float | int | str | None = Field(default=None, alias="Amount")
     client_mobile: str | None = Field(default=None, alias="ClientMobile")
     receipt_url: str | None = Field(default=None, alias="ReceiptUrl")
     order_number: str | int | None = Field(default=None, alias="OrderNumber")

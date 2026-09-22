@@ -64,11 +64,12 @@ def entrance_headers_base(app: AppConfig) -> dict[str, str]:
     }
 
 
-def signed_qrpay_headers(url: str, session: KaspiSession, device: DeviceIdentity, app: AppConfig) -> dict[str, str]:
+def signed_qrpay_headers(
+    url: str, session: KaspiSession, device: DeviceIdentity, app: AppConfig, *, body: str | None = None,
+) -> dict[str, str]:
     xsh = (
-        "url,X-Request-ID,X-Device-ID,X-Platform-Ver,X-App-Bld,X-Time,"
-        "X-Kb-TokenSn,X-App-Ver,X-Kb-TokenSnMac,X-Call,X-PI,X-Install-ID,"
-        "X-Platform-Type,X-Locale,X-SV"
+        "url,X-Install-ID,X-PI,X-App-Bld,X-Platform-Ver,X-Locale,X-App-Ver,"
+        "X-Device-ID,X-SV,X-Time,X-Platform-Type,X-Call,X-Kb-TokenSnMac,X-Kb-TokenSn"
     )
     headers = {
         "X-Kb-TokenSn": session.token_sn,
@@ -91,7 +92,7 @@ def signed_qrpay_headers(url: str, session: KaspiSession, device: DeviceIdentity
         "Accept-Language": "ru",
         "Accept-Encoding": "gzip, deflate, br",
     }
-    headers["X-Sign"] = compute_x_sign(url, headers, xsh, device)
+    headers["X-Sign"] = compute_x_sign(url, headers, xsh, device, body)
     return headers
 
 

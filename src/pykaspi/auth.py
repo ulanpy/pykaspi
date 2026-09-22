@@ -18,7 +18,9 @@ from .headers import (
     now_iso,
 )
 from .models import EntranceSession, KaspiSession, apply_org_context
+from .schemas import AuthInitResult, SendPhoneResult
 from .transport import KaspiTransport
+from .validation import normalize_phone
 
 
 class AuthApi:
@@ -31,7 +33,7 @@ class AuthApi:
         self._entrance_sessions: dict[str, EntranceSession] = {}
         self._registration_ecdh: EcdhKeyPair | None = None
 
-    async def init(self) -> dict[str, Any]:
+    async def init(self) -> AuthInitResult:
         """Start Kaspi SMS login and return a `process_id`.
 
         Call `send_phone(process_id, phone_number)` next. The `phone_number`
@@ -75,15 +77,20 @@ class AuthApi:
                 "actType": "Success",
             },
         )
+        self._check_entrance_error(body)
         session.user_token = extract_user_token(response.headers.get_list("set-cookie"))
         session.process_id = (body.get("meta") or {}).get("pId")
         session.raw = body
         if not session.process_id:
             raise KaspiAuthError("Kaspi did not return processId", body=body)
         self._entrance_sessions[session.process_id] = session
-        return {"process_id": session.process_id, "view": (body.get("view") or {}).get("code"), "body": body}
+        return AuthInitResult(
+            process_id=session.process_id,
+            view=(body.get("view") or {}).get("code"),
+            body=body,
+        )
 
-    async def send_phone(self, process_id: str, phone_number: str) -> dict[str, Any]:
+    async def send_phone(self, process_id: str, phone_number: str) -> SendPhoneResult:
         """Send the cashier phone number and trigger Kaspi SMS OTP.
 
         Args:
@@ -91,9 +98,10 @@ class AuthApi:
             phone_number: Local KZ mobile digits without country prefix.
 
         Returns:
-            A raw entrance response dictionary with a boolean `success` field.
+            `SendPhoneResult` with `success`, `description`, and raw body.
         """
         session = self._get_entrance_session(process_id)
+        phone_number = normalize_phone(phone_number)
         session.phone_number = phone_number
         url = f"{KASPI_ENTRANCE_URL}/api/v1/entrance/step"
         response, body = await self.transport.request_with_response(
@@ -113,15 +121,63 @@ class AuthApi:
                 "actType": "Success",
             },
         )
+        self._check_entrance_error(body)
         session.user_token = extract_user_token(response.headers.get_list("set-cookie")) or session.user_token
         session.raw = body
-        return {
-            "success": (body.get("view") or {}).get("code") == "EnterOtp",
-            "process_id": process_id,
-            "description": (body.get("data") or {}).get("desc"),
-            "view": (body.get("view") or {}).get("code"),
-            "body": body,
-        }
+        return self._challenge_result(process_id, body)
+
+    @staticmethod
+    def _challenge_result(process_id: str, body: dict[str, Any]) -> SendPhoneResult:
+        view = (body.get("view") or {}).get("code")
+        data = body.get("data") or {}
+        operation_type = (data.get("ext") or {}).get("operationType")
+        if view == "EnterOtp":
+            status = "otp_required"
+        elif view == "KPEnterLoginPassword":
+            status = "password_required"
+        elif view == "KPMobileCall":
+            status = "mobile_confirmation_required"
+        else:
+            status = "unsupported_challenge"
+        return SendPhoneResult(
+            status=status,
+            success=status == "otp_required",
+            process_id=process_id,
+            description=data.get("desc"),
+            view=view,
+            challenge_type=data.get("type"),
+            operation_type=operation_type,
+            auth_methods=data.get("authMethods"),
+            body=body,
+        )
+
+    async def submit_password(self, process_id: str, password: str) -> SendPhoneResult:
+        """Submit the account password and return the next authentication challenge.
+
+        Mirrors the Kaspi entrance web client's password step. Read passwords
+        locally; do not persist them. This method does not retry rejected input.
+        """
+        session = self._get_entrance_session(process_id)
+        if (session.raw.get("view") or {}).get("code") != "KPEnterLoginPassword":
+            raise KaspiAuthError("The current login process is not requesting a password")
+        if not password or not password.strip():
+            raise ValueError("Password must not be empty")
+        meta = session.raw.get("meta")
+        if not isinstance(meta, dict) or not meta.get("sn"):
+            raise KaspiAuthError("Password challenge is missing step metadata", body=session.raw)
+        response, body = await self.transport.request_with_response(
+            "POST", f"{KASPI_ENTRANCE_URL}/api/v1/entrance/step",
+            headers={
+                **entrance_headers_base(self.app),
+                "Referer": f"{KASPI_ENTRANCE_URL}/process/enter-login-password?pId={process_id}",
+                "Cookie": entrance_cookie(self.device, self.app, session.user_token),
+            },
+            json={"meta": {**meta, "pId": process_id}, "data": {"password": password}, "actType": "Success"},
+        )
+        session.user_token = extract_user_token(response.headers.get_list("set-cookie")) or session.user_token
+        self._check_entrance_error(body)
+        session.raw = body
+        return self._challenge_result(process_id, body)
 
     async def verify_otp(self, process_id: str, otp: str) -> KaspiSession:
         """Verify SMS OTP and return an authenticated `KaspiSession`.
@@ -131,6 +187,10 @@ class AuthApi:
         future SignInLite refresh attempts.
         """
         entrance_session = self._get_entrance_session(process_id)
+        otp = otp.strip()
+        if not otp or not otp.isascii() or not otp.isdigit():
+            raise ValueError("SMS code must contain digits only")
+        meta = entrance_session.raw.get("meta") or {}
         url = f"{KASPI_ENTRANCE_URL}/api/v1/entrance/step"
         response, body = await self.transport.request_with_response(
             "POST",
@@ -144,8 +204,8 @@ class AuthApi:
                 "Cookie": entrance_cookie(self.device, self.app, entrance_session.user_token),
             },
             json={
-                "meta": {"pId": process_id, "sn": "ViewEnterOtp"},
-                "data": {"userOtp": otp, "inputType": "auto"},
+                "meta": {**meta, "pId": process_id, "sn": meta.get("sn") or "ViewEnterOtp"},
+                "data": {"userOtp": otp, "inputType": "Manual"},
                 "actType": "Success",
             },
         )
@@ -153,8 +213,29 @@ class AuthApi:
         entrance_session.raw = body
 
         if (body.get("data") or {}).get("type") != "kpDeviceRegistration" and (body.get("view") or {}).get("code") != "KPMobileCall":
-            raise KaspiAuthError("OTP was not accepted by Kaspi", body=body)
+            self._check_entrance_error(body)
+            view = (body.get("view") or {}).get("code")
+            step = (body.get("meta") or {}).get("sn")
+            kind = (body.get("data") or {}).get("type")
+            raise KaspiAuthError(
+                f"Unexpected step after SMS: view={view}, step={step}, type={kind}. "
+                "This does not by itself mean the SMS code was incorrect.", body=body,
+            )
 
+        try:
+            return await self._finish(entrance_session)
+        finally:
+            self._entrance_sessions.pop(process_id, None)
+
+    async def confirm_mobile(self, process_id: str) -> KaspiSession:
+        """Finish login after Kaspi requests mobile/app confirmation.
+
+        Use this when `send_phone()` returns
+        `status == "mobile_confirmation_required"`. The user should first
+        approve the pending action in the Kaspi/Kaspi Pay app, then call this
+        method with the same `process_id`.
+        """
+        entrance_session = self._get_entrance_session(process_id)
         try:
             return await self._finish(entrance_session)
         finally:
@@ -245,8 +326,14 @@ class AuthApi:
                 "OrganizationId": organization_id or session.organization_id or 0,
             },
         )
-        if body.get("StatusCode") == 0 and body.get("Data"):
-            apply_org_context(session, body["Data"])
+        if body.get("StatusCode") != 0 or not body.get("Data"):
+            raise KaspiReauthRequiredError(
+                body.get("Message") or body.get("Description") or "Kaspi did not activate organization context",
+                body=body,
+            )
+        apply_org_context(session, body["Data"])
+        if session.profile_id is None or session.organization_id is None:
+            raise KaspiAuthError("Kaspi returned organization context without cashier profile or organization", body=body)
         session.raw = {**session.raw, "org_context": body}
         return session
 
@@ -294,6 +381,17 @@ class AuthApi:
         )
         await self.load_org_context(session)
         return session
+
+    @staticmethod
+    def _check_entrance_error(body: dict[str, Any]) -> None:
+        error = (body.get("error") or (body.get("data") or {}).get("error")
+                 or ((body.get("view") or {}).get("onOpenAlarm") or {}).get("error") or {})
+        if error:
+            message = error.get("label") or error.get("desc") or "Kaspi rejected login"
+            code = error.get("code")
+            raise KaspiAuthError(f"{code}: {message}" if code else message, body=body)
+        if body.get("isClosed"):
+            raise KaspiAuthError("Kaspi closed the login process", body=body)
 
     def _get_entrance_session(self, process_id: str) -> EntranceSession:
         try:

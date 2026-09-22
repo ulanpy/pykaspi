@@ -12,3 +12,5 @@ wheels/
 # Local Kaspi credentials/session files
 device.json
 session.json
+.pykaspi-live/
+js-session.json

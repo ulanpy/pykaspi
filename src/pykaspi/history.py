@@ -6,6 +6,7 @@ from .headers import signed_qrpay_headers
 from .models import KaspiSession
 from .schemas import HistoryOperationsData, KaspiResponse, OperationDetailsData
 from .transport import KaspiTransport
+from .wire import json_body
 
 
 class HistoryApi:
@@ -33,15 +34,11 @@ class HistoryApi:
             statement_period_code: Kaspi period filter code.
         """
         url = f"{KASPI_QRPAY_URL}/v02/history/operations"
+        payload = json_body({"EndDate": end_date, "LastTransactionDate": last_transaction_date, "StatementPeriodCode": statement_period_code})
         body = await self.transport.request(
             "POST",
             url,
-            headers={**signed_qrpay_headers(url, session, self.device, self.app), "Content-Type": "application/json"},
-            json={
-                "EndDate": end_date,
-                "LastTransactionDate": last_transaction_date,
-                "StatementPeriodCode": statement_period_code,
-            },
+            headers={**signed_qrpay_headers(url, session, self.device, self.app, body=payload), "Content-Type": "application/json"}, content=payload,
         )
         return KaspiResponse[HistoryOperationsData].model_validate(body)
 
@@ -54,10 +51,10 @@ class HistoryApi:
     ) -> KaspiResponse[OperationDetailsData]:
         """Fetch details for a single operation from history."""
         url = f"{KASPI_QRPAY_URL}/v01/kaspi-qr/operations/details"
+        payload = json_body({"Id": int(operation_id), "OperationMethod": operation_method})
         body = await self.transport.request(
             "POST",
             url,
-            headers={**signed_qrpay_headers(url, session, self.device, self.app), "Content-Type": "application/json"},
-            json={"Id": int(operation_id), "OperationMethod": operation_method},
+            headers={**signed_qrpay_headers(url, session, self.device, self.app, body=payload), "Content-Type": "application/json"}, content=payload,
         )
         return KaspiResponse[OperationDetailsData].model_validate(body)

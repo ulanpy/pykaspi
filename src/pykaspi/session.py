@@ -7,6 +7,7 @@ from .headers import signed_qrpay_headers
 from .models import KaspiSession
 from .schemas import HistoryOperationsData, KaspiResponse, SessionCheckResult
 from .transport import KaspiTransport
+from .wire import json_body
 
 
 class SessionApi:
@@ -25,15 +26,11 @@ class SessionApi:
         login if refresh raises `KaspiReauthRequiredError`.
         """
         url = f"{KASPI_QRPAY_URL}/v02/history/operations"
+        payload = json_body({"EndDate": date.today().isoformat(), "LastTransactionDate": "", "StatementPeriodCode": 0})
         body = await self.transport.request(
             "POST",
             url,
-            headers={**signed_qrpay_headers(url, session, self.device, self.app), "Content-Type": "application/json"},
-            json={
-                "EndDate": date.today().isoformat(),
-                "LastTransactionDate": "",
-                "StatementPeriodCode": 0,
-            },
+            headers={**signed_qrpay_headers(url, session, self.device, self.app, body=payload), "Content-Type": "application/json"}, content=payload,
         )
         response = KaspiResponse[HistoryOperationsData].model_validate(body)
         return SessionCheckResult(active=response.ok, body=response)

@@ -1,11 +1,13 @@
 from __future__ import annotations
 
 import asyncio
+import math
 from collections.abc import Awaitable, Callable
 from dataclasses import dataclass
 from typing import Any, Literal
 
 from .models import KaspiSession
+from .exceptions import KaspiApiError
 from .schemas import KaspiResponse
 
 
@@ -46,20 +48,22 @@ INVOICE_INTERMEDIATE = {"RemotePaymentCreated"}
 def resolve_payment_event(payment_type: PaymentType, status: str) -> str | None:
     """Map a Kaspi payment status to a normalized payment event.
 
-    Returns `None` for intermediate statuses that should continue polling.
+    Returns `None` for intermediate or unrecognized statuses; keep polling.
     """
     if payment_type == "qr":
         if status in QR_INTERMEDIATE:
             return None
-        return QR_FINAL_STATUSES.get(status, "payment.failed")
+        return QR_FINAL_STATUSES.get(status)
+    if payment_type != "invoice":
+        raise ValueError("payment_type must be 'qr' or 'invoice'")
     if status in INVOICE_INTERMEDIATE:
         return None
-    return INVOICE_FINAL_STATUSES.get(status, "payment.failed")
+    return INVOICE_FINAL_STATUSES.get(status)
 
 
 @dataclass(slots=True)
 class PaymentPollResult:
-    """Result returned by `poll_until_final`."""
+    """Observed result. `payment.timeout` does not mean the invoice expired."""
 
     event: str
     status: str
@@ -75,7 +79,8 @@ def _extract_status(body: Any) -> str:
             return str(data.get("Status") or "Unknown")
         return str(getattr(data, "status", None) or getattr(data, "Status", None) or "Unknown")
     if isinstance(body, dict):
-        return str(((body.get("Data") or {}).get("Status")) or "Unknown")
+        data = body.get("Data")
+        return str(data.get("Status") or "Unknown") if isinstance(data, dict) else "Unknown"
     return str(getattr(body, "status", None) or "Unknown")
 
 
@@ -99,13 +104,35 @@ async def poll_until_final(
         interval: Delay between status checks in seconds.
         timeout: Maximum wait time in seconds.
     """
-    deadline = asyncio.get_running_loop().time() + timeout
+    if not math.isfinite(timeout) or timeout <= 0:
+        raise ValueError("timeout must be finite and positive")
+    if not math.isfinite(interval) or interval < 0:
+        raise ValueError("interval must be finite and non-negative")
+    if payment_type not in ("qr", "invoice"):
+        raise ValueError("payment_type must be 'qr' or 'invoice'")
+    loop = asyncio.get_running_loop()
+    deadline = loop.time() + timeout
+    body = None
+    status = "Unknown"
     while True:
-        body = await fetch_status(session, payment_id)
+        remaining = deadline - loop.time()
+        if remaining <= 0:
+            return PaymentPollResult(event="payment.timeout", status=status, body=body)
+        timer = asyncio.timeout(remaining)
+        try:
+            async with timer:
+                body = await fetch_status(session, payment_id)
+        except TimeoutError:
+            if not timer.expired():
+                raise
+            return PaymentPollResult(event="payment.timeout", status=status, body=body)
+        payload = body.raw() if isinstance(body, KaspiResponse) else body
+        if isinstance(payload, dict) and payload.get("StatusCode") not in (None, 0):
+            raise KaspiApiError(payload.get("Message") or "Status lookup rejected", body=payload)
         status = _extract_status(body)
+        if status == "Unknown":
+            raise KaspiApiError("Status lookup returned no payment status", body=payload)
         event = resolve_payment_event(payment_type, status)
         if event:
             return PaymentPollResult(event=event, status=status, body=body)
-        if asyncio.get_running_loop().time() >= deadline:
-            return PaymentPollResult(event="payment.expired", status=status, body=body)
-        await asyncio.sleep(interval)
+        await asyncio.sleep(min(interval, max(0, deadline - loop.time())))

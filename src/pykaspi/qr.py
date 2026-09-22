@@ -6,6 +6,7 @@ from .headers import signed_qrpay_headers
 from .models import KaspiSession
 from .schemas import KaspiResponse, QrCreateData, QrStatusData
 from .transport import KaspiTransport
+from .wire import json_body
 
 
 class QrApi:
@@ -37,16 +38,11 @@ class QrApi:
             `data.qr_token`, `data.expire_date`, and other Kaspi fields.
         """
         url = f"{KASPI_QRPAY_URL}/v01/qr-token/create"
+        payload = json_body({"PaymentAmount": float(amount), "DeviceInterface": "Pos", "Latitude": latitude, "Longitude": longitude})
         body = await self.transport.request(
             "POST",
             url,
-            headers={**signed_qrpay_headers(url, session, self.device, self.app), "Content-Type": "application/json"},
-            json={
-                "PaymentAmount": float(amount),
-                "DeviceInterface": "Pos",
-                "Latitude": latitude,
-                "Longitude": longitude,
-            },
+            headers={**signed_qrpay_headers(url, session, self.device, self.app, body=payload), "Content-Type": "application/json"}, content=payload,
         )
         data = body.get("Data")
         if isinstance(data, dict) and isinstance(data.get("QrToken"), str):

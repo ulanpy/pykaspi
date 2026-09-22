@@ -12,18 +12,18 @@ KASPI_QRPAY_URL = "https://qrpay.kaspi.kz"
 class AppConfig:
     """Kaspi Pay mobile app fingerprint used by the private API."""
 
-    version: str = "4.111"
-    build: str = "1101"
+    version: str = "4.112.1"
+    build: str = "1107"
     platform: str = "iOS"
-    platform_ver: str = "18.5"
+    platform_ver: str = "18.4"
     locale: str = "ru-RU"
-    model: str = "iPhone17,3"
+    model: str = "iPhone16,2"
     brand: str = "Apple"
     device_name: str = "iPhone"
-    screen_w: str = "393.0"
-    screen_h: str = "852.0"
-    cf_network: str = "CFNetwork/3826.500.131"
-    darwin: str = "Darwin/24.5.0"
+    screen_w: str = "430.0"
+    screen_h: str = "932.0"
+    cf_network: str = "CFNetwork/3826.400.120"
+    darwin: str = "Darwin/24.4.0"
 
     @property
     def native_user_agent(self) -> str:

@@ -6,6 +6,7 @@ from .headers import signed_qrpay_headers
 from .models import KaspiSession
 from .schemas import KaspiResponse, RefundCreateData
 from .transport import KaspiTransport
+from .wire import json_body
 
 
 class RefundApi:
@@ -30,14 +31,10 @@ class RefundApi:
             return_amount: Amount to return in KZT.
         """
         url = f"{KASPI_QRPAY_URL}/v01/kaspi-qr/history-pos-return"
+        payload = json_body({"ReturnAmount": float(return_amount), "QrOperationId": int(qr_operation_id), "DeviceInterface": "Pos"})
         body = await self.transport.request(
             "POST",
             url,
-            headers={**signed_qrpay_headers(url, session, self.device, self.app), "Content-Type": "application/json"},
-            json={
-                "ReturnAmount": float(return_amount),
-                "QrOperationId": int(qr_operation_id),
-                "DeviceInterface": "Pos",
-            },
+            headers={**signed_qrpay_headers(url, session, self.device, self.app, body=payload), "Content-Type": "application/json"}, content=payload,
         )
         return KaspiResponse[RefundCreateData].model_validate(body)

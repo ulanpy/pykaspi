@@ -45,6 +45,7 @@ class KaspiTransport:
         *,
         headers: Mapping[str, str] | None = None,
         json: Any = None,
+        content: str | bytes | None = None,
         params: Mapping[str, Any] | None = None,
     ) -> dict[str, Any]:
         """Send an HTTP request and return parsed JSON.
@@ -52,11 +53,7 @@ class KaspiTransport:
         Raises:
             KaspiApiError: Network errors or non-2xx HTTP responses.
         """
-        response, body = await self.request_with_response(method, url, headers=headers, json=json, params=params)
-        if response.is_error:
-            message = body.get("Message") or body.get("message") or response.reason_phrase
-            raise KaspiApiError(message, status_code=response.status_code, body=body)
-
+        _, body = await self.request_with_response(method, url, headers=headers, json=json, content=content, params=params)
         return body
 
     async def request_with_response(
@@ -66,13 +63,14 @@ class KaspiTransport:
         *,
         headers: Mapping[str, str] | None = None,
         json: Any = None,
+        content: str | bytes | None = None,
         params: Mapping[str, Any] | None = None,
     ) -> tuple[httpx.Response, dict[str, Any]]:
         """Send an HTTP request and return both `httpx.Response` and JSON body."""
         if self.debug:
             self.logger.debug("Kaspi request %s %s headers=%s", method, url, self._sanitize(headers or {}))
         try:
-            response = await self.client.request(method, url, headers=headers, json=json, params=params)
+            response = await self.client.request(method, url, headers=headers, json=json, content=content, params=params)
         except httpx.HTTPError as exc:
             raise KaspiApiError(str(exc)) from exc
 
@@ -81,8 +79,17 @@ class KaspiTransport:
         except ValueError:
             body = {"raw": response.text}
 
+        if not isinstance(body, dict):
+            raise KaspiApiError("Expected a JSON object from Kaspi", status_code=response.status_code)
+
         if self.debug:
-            self.logger.debug("Kaspi response %s %s body=%s", response.status_code, response.reason_phrase, body)
+            self.logger.debug("Kaspi response %s %s", response.status_code, response.reason_phrase)
+
+        if response.is_error:
+            raise KaspiApiError(
+                body.get("Message") or body.get("message") or response.reason_phrase,
+                status_code=response.status_code, body=body,
+            )
 
         return response, body
 

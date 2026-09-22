@@ -45,6 +45,58 @@ class KaspiSession:
         """Restore a session from a stored token and base64 vtoken secret."""
         return cls(token_sn=token_sn, vtoken_secret=base64.b64decode(vtoken_secret_b64), **kwargs)
 
+    def to_dict(self) -> dict[str, Any]:
+        """Serialize this session to a storage-agnostic dictionary.
+
+        The returned mapping is JSON-compatible and can be stored in files,
+        JSONB columns, Redis, Vault, or split into ORM columns. Treat the
+        result as sensitive credentials.
+        """
+        return {
+            "token_sn": self.token_sn,
+            "vtoken_secret_b64": self.vtoken_secret_b64,
+            "ecdh_private_key_b64": self.ecdh_private_key_b64,
+            "profile_id": self.profile_id,
+            "phone_number": self.phone_number,
+            "org_name": self.org_name,
+            "user_id": self.user_id,
+            "organization_id": self.organization_id,
+            "organization_idn": self.organization_idn,
+            "organization_kbe": self.organization_kbe,
+            "emp_id": self.emp_id,
+            "access_level_type": self.access_level_type,
+            "is_cashier": self.is_cashier,
+            "payer_type": self.payer_type,
+            "category_name": self.category_name,
+            "possible_payment_methods": self.possible_payment_methods,
+            "show_fake_card": self.show_fake_card,
+            "organizations": self.organizations,
+        }
+
+    @classmethod
+    def from_dict(cls, data: dict[str, Any]) -> "KaspiSession":
+        """Restore a session from `to_dict()` output or an equivalent mapping."""
+        return cls.from_base64(
+            token_sn=data["token_sn"],
+            vtoken_secret_b64=data["vtoken_secret_b64"],
+            ecdh_private_key_b64=data.get("ecdh_private_key_b64"),
+            profile_id=data.get("profile_id"),
+            phone_number=data.get("phone_number"),
+            org_name=data.get("org_name"),
+            user_id=data.get("user_id"),
+            organization_id=data.get("organization_id"),
+            organization_idn=data.get("organization_idn"),
+            organization_kbe=data.get("organization_kbe"),
+            emp_id=data.get("emp_id"),
+            access_level_type=data.get("access_level_type"),
+            is_cashier=data.get("is_cashier"),
+            payer_type=data.get("payer_type"),
+            category_name=data.get("category_name"),
+            possible_payment_methods=data.get("possible_payment_methods"),
+            show_fake_card=data.get("show_fake_card"),
+            organizations=data.get("organizations"),
+        )
+
 
 @dataclass(slots=True)
 class EntranceSession:

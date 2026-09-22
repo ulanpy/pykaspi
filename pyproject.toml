@@ -8,7 +8,7 @@ authors = [
 ]
 license = "MIT"
 license-files = ["LICENSE"]
-requires-python = ">=3.12"
+requires-python = ">=3.11"
 keywords = [
     "kaspi",
     "kaspi-pay",
@@ -23,6 +23,7 @@ classifiers = [
     "Intended Audience :: Developers",
     "Operating System :: OS Independent",
     "Programming Language :: Python :: 3",
+    "Programming Language :: Python :: 3.11",
     "Programming Language :: Python :: 3.12",
     "Typing :: Typed",
 ]
@@ -31,6 +32,9 @@ dependencies = [
     "httpx>=0.28.1",
     "pydantic>=2.13.4",
 ]
+
+[project.scripts]
+pykaspi-terminal-init = "pykaspi.cli:main"
 
 [project.urls]
 Homepage = "https://github.com/ulanpy/pykaspi"

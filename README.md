@@ -9,7 +9,7 @@ Python-библиотека для удалённой оплаты через Ka
 
 ## Установка
 
-    pip install pykaspi
+    python -m pip install pykaspi
 
 ## Один файл терминала
 
@@ -17,9 +17,9 @@ Python-библиотека для удалённой оплаты через Ka
 секретном JSON-файле. Не коммитьте этот файл и
 не передавайте его содержимое: он даёт доступ к терминалу.
 
-Один раз создайте файл для кассира:
+Используйте тот же Python, в который установлен пакет:
 
-    pykaspi-terminal-init \
+    python -m pykaspi.cli \
       --state ./secrets/kaspi-terminal.json \
       --phone +77000000000
 

@@ -1,6 +1,6 @@
 [project]
 name = "pykaspi"
-version = "0.1.0"
+version = "0.1.1"
 description = "Async Python client for Kaspi Pay POS private HTTP API"
 readme = "README.md"
 authors = [

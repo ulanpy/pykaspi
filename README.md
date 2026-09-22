@@ -1,11 +1,17 @@
 # pykaspi
 
+<img align="right" src="docs/assets/pykaspi-terminal.png" alt="pykaspi terminal" width="110">
+
+> Unofficial Python client for Kaspi Pay terminals
+
 Python-библиотека для удалённой оплаты через Kaspi Pay. Ваше приложение создаёт
 счёт по номеру покупателя и получает банковский статус: оплачено, отклонено,
 истекло или ещё ожидает оплаты.
 
 Это неофициальный клиент внутреннего API Kaspi Pay. Kaspi может менять
 протокол или запрашивать повторную авторизацию.
+
+<br clear="right">
 
 ## Установка
 

@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
+import os
 
 
 KASPI_ENTRANCE_URL = "https://entrance-pay.kaspi.kz"
@@ -12,8 +13,8 @@ KASPI_QRPAY_URL = "https://qrpay.kaspi.kz"
 class AppConfig:
     """Kaspi Pay mobile app fingerprint used by the private API."""
 
-    version: str = "4.112.1"
-    build: str = "1107"
+    version: str = "26.0921"
+    build: str = "1115"
     platform: str = "iOS"
     platform_ver: str = "18.4"
     locale: str = "ru-RU"
@@ -39,3 +40,15 @@ class AppConfig:
 
 
 DEFAULT_APP_CONFIG = AppConfig()
+
+
+def app_config_from_env() -> AppConfig:
+    """Return the default fingerprint with optional environment overrides.
+
+    Set both variables together only for a verified newer Kaspi Pay release:
+    PYKASPI_APP_VERSION and PYKASPI_APP_BUILD.
+    """
+    return AppConfig(
+        version=os.getenv("PYKASPI_APP_VERSION", DEFAULT_APP_CONFIG.version),
+        build=os.getenv("PYKASPI_APP_BUILD", DEFAULT_APP_CONFIG.build),
+    )

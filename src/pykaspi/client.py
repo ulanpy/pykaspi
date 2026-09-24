@@ -5,7 +5,7 @@ from types import TracebackType
 import httpx
 
 from .auth import AuthApi
-from .config import AppConfig, DEFAULT_APP_CONFIG
+from .config import AppConfig, app_config_from_env
 from .device import DeviceIdentity
 from .history import HistoryApi
 from .invoice import InvoiceApi
@@ -39,13 +39,13 @@ class KaspiClient:
         self,
         device: DeviceIdentity | None = None,
         *,
-        app: AppConfig = DEFAULT_APP_CONFIG,
+        app: AppConfig | None = None,
         http_client: httpx.AsyncClient | None = None,
         timeout: float = 20.0,
         debug: bool = False,
     ) -> None:
         self.device = device or DeviceIdentity.generate()
-        self.app = app
+        self.app = app or app_config_from_env()
         self.transport = KaspiTransport(client=http_client, timeout=timeout, debug=debug)
 
         self.auth = AuthApi(self.transport, self.device, self.app)

@@ -11,6 +11,12 @@ Python-библиотека для удалённой оплаты через Ka
 Это неофициальный клиент внутреннего API Kaspi Pay. Kaspi может менять
 протокол или запрашивать повторную авторизацию.
 
+Если Kaspi отклонил текущую версию приложения, можно временно подставить
+проверенную пару fingerprint без обновления пакета:
+
+    PYKASPI_APP_VERSION=26.0921 PYKASPI_APP_BUILD=1115 \
+      python -m pykaspi.cli --state ./secrets/kaspi-terminal.json --phone +770...
+
 <br clear="right">
 
 ## Установка

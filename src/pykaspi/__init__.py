@@ -1,5 +1,5 @@
 from .client import KaspiClient
-from .config import AppConfig
+from .config import AppConfig, app_config_from_env
 from .crypto import secret_from_base64, secret_to_base64
 from .device import DeviceIdentity
 from .exceptions import KaspiApiError, KaspiAuthError, KaspiReauthRequiredError, PykaspiError
@@ -24,6 +24,7 @@ from .schemas import (
 
 __all__ = [
     "AppConfig",
+    "app_config_from_env",
     "AuthInitResult",
     "DeviceIdentity",
     "EntranceSession",

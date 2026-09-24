@@ -13,6 +13,7 @@ from pykaspi import (
     SendPhoneResult,
 )
 from pykaspi.crypto import EcdhKeyPair, compute_token_sn_mac, secret_from_base64, secret_to_base64
+from pykaspi.config import app_config_from_env
 from pykaspi.headers import entrance_cookie, signed_qrpay_headers
 from pykaspi.payments import PaymentPollResult, poll_until_final
 
@@ -21,6 +22,16 @@ def test_secret_base64_roundtrip() -> None:
     secret = b"secret-bytes"
 
     assert secret_from_base64(secret_to_base64(secret)) == secret
+
+
+def test_app_fingerprint_can_be_overridden_from_environment(monkeypatch) -> None:
+    monkeypatch.setenv("PYKASPI_APP_VERSION", "test-version")
+    monkeypatch.setenv("PYKASPI_APP_BUILD", "test-build")
+
+    app = app_config_from_env()
+
+    assert app.version == "test-version"
+    assert app.build == "test-build"
 
 
 def test_session_dict_roundtrip() -> None:
